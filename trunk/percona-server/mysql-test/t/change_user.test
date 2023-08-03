@@ -1,0 +1,198 @@
+# functional change user tests
+#
+connect (con_main,localhost,root);
+
+create user test_nopw;
+grant select on test.* to test_nopw;
+create user test_newpw identified by "newpw";
+grant select on test.* to test_newpw;
+
+select user(), current_user(), database();
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+   
+
+change_user test_nopw;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user test_newpw, newpw;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user root;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user test_nopw,,test;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user test_newpw,newpw,test;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+change_user root,,test;
+select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
+
+drop user test_nopw;
+drop user test_newpw;
+
+connection default;
+disconnect con_main;
+
+#
+# Bug#20023 mysql_change_user() resets the value of SQL_BIG_SELECTS
+#
+
+--echo Bug#20023
+SELECT @@session.sql_big_selects;
+# The exact value depends on the server build flags
+--replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
+SELECT @@global.max_join_size;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+# The exact value depends on the server build flags
+--replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
+SELECT @@global.max_join_size;
+SET @@global.max_join_size = 10000;
+SET @@session.max_join_size = default;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+# On some machines the following will result into a warning
+--disable_warnings
+SET @@global.max_join_size = 18446744073709551615;
+--enable_warnings
+SET @@session.max_join_size = default;
+--echo change_user
+--change_user
+SELECT @@session.sql_big_selects;
+
+#
+# Bug #18329348 Bug #18329560 Bug #18328396 Bug #18329452 mysql_change_user()
+# resets all SESSION ONLY system variables
+#
+
+SET INSERT_ID=12;
+SELECT @@INSERT_ID;
+SET TIMESTAMP=200;
+SELECT @@TIMESTAMP;
+--echo change_user
+--change_user
+SELECT @@INSERT_ID;
+SELECT @@TIMESTAMP=200;
+
+#
+# Bug#31418 User locks misfunctioning after mysql_change_user()
+#
+
+--echo Bug#31418
+SELECT IS_FREE_LOCK('bug31418');
+SELECT IS_USED_LOCK('bug31418');
+SELECT GET_LOCK('bug31418', 1);
+SELECT IS_USED_LOCK('bug31418') = CONNECTION_ID();
+--echo change_user
+--change_user
+SELECT IS_FREE_LOCK('bug31418');
+SELECT IS_USED_LOCK('bug31418');
+
+#
+# Bug#31222: com_% global status counters behave randomly with
+# mysql_change_user.
+#
+
+FLUSH STATUS;
+
+--disable_result_log
+--disable_query_log
+
+let $i = 100;
+
+while ($i)
+{
+  dec $i;
+
+  SELECT 1;
+}
+
+--enable_query_log
+--enable_result_log
+
+let $before= query_get_value(SHOW GLOBAL STATUS LIKE 'com_select',Value,1);
+
+--change_user
+
+let $after= query_get_value(SHOW GLOBAL STATUS LIKE 'com_select',Value,1);
+
+if ($after != $before){
+  SHOW GLOBAL STATUS LIKE 'com_select';
+  die The value of com_select changed during change_user;
+}
+echo Value of com_select did not change;
+
+--echo #
+--echo # PS-8683 "Mutex deadlock (com_statistics, com_change_user, show full processlist)".
+--echo #
+
+--echo # The original problem reported was that concurrent execution of
+--echo # COM_STATISTICS, COM_CHANGE_USER commands and SHOW FULL PROCESSLIST
+--echo # statements sometimes led to deadlock. This test uses FLUSH STATUS
+--echo # statement instead of the first command and SELECT ... FROM
+--echo # I_S.PROCESSLIST instead of the latter. They acquire the same
+--echo # locks and were affected by the same problem.
+--echo # Doing 3000 concurrent runs of each statement was enough to reproduce
+--echo # the deadlock with 80% probability on my machine.
+
+--delimiter |
+
+CREATE PROCEDURE p_flush_status()
+BEGIN
+  DECLARE x INT DEFAULT 3000;
+  WHILE x DO
+    SET x = x-1;
+    FLUSH STATUS;
+  END WHILE;
+END |
+
+CREATE PROCEDURE p_processlist()
+BEGIN
+  DECLARE x INT DEFAULT 3000;
+  WHILE x DO
+    SET x = x-1;
+    SELECT COUNT(*) INTO @a FROM information_schema.processlist;
+  END WHILE;
+END |
+
+--delimiter ;
+
+--enable_connect_log
+--connect (con1, localhost, root,,)
+--echo # Send:
+--send CALL p_flush_status()
+
+--echo # Send:
+--connect (con2, localhost, root,,)
+--send CALL p_processlist()
+
+--connection default
+
+--echo # Execute COM_CHANGE_USER command 3000 times.
+let $i = 3000;
+while ($i)
+{
+  dec $i;
+--change_user
+}
+
+--connection con1
+--echo # Reap p_flush_status().
+--reap
+--disconnect con1
+--source include/wait_until_disconnected.inc
+
+--connection con2
+--echo # Reap p_processlist().
+--reap
+--disconnect con2
+--source include/wait_until_disconnected.inc
+
+--connection default
+--disable_connect_log
+DROP PROCEDURE p_flush_status;
+DROP PROCEDURE p_processlist;
