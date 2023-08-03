@@ -4,6 +4,7 @@ cd percona-server
 
 mkdir -p build
 cd build
+rm ./* -rf
 
 export CPPFLAGS="-DOPTIMIZER_TRACE"
 
@@ -20,4 +21,4 @@ make install
 
 # ./build-ps/percona-server-8.0_builder.sh --builddir=./build --get_sources=1 --build_src_rpm=1 --build_rpm=1
 
-cd ..
+cd ../..
