@@ -2,11 +2,18 @@
 
 cd percona-server
 
-mkdir -p build
+mkdir -p build_release
+cd build_release
+rm ./* -rf
 
-dos2unix ./build-ps/*.sh
-chmod +x ./build-ps/*.sh
+export CPPFLAGS="-DOPTIMIZER_TRACE"
 
-./build-ps/percona-server-8.0_builder.sh --builddir=./build --get_sources=1 --build_src_rpm=1 --build_rpm=1
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp \
+    -DWITH_UNIT_TESTS=OFF
 
-cd ..
+make -j`nproc`
+make install
+
+cd ../..
