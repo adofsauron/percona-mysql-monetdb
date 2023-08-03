@@ -9,7 +9,7 @@ rm ./* -rf
 export CPPFLAGS="-DOPTIMIZER_TRACE"
 
 cmake .. \
-    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_TYPE=Release \
     -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp \
     -DWITH_UNIT_TESTS=OFF
 
