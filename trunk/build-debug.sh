@@ -10,7 +10,8 @@ export CPPFLAGS="-DOPTIMIZER_TRACE"
 
 cmake .. \
     -DCMAKE_BUILD_TYPE=Debug \
-    -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/tmp \
+    -DDOWNLOAD_BOOST=1 \
+    -DWITH_BOOST=/tmp \
     -DWITH_UNIT_TESTS=OFF
 
 make -j`nproc`
