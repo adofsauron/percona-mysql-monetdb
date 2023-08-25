@@ -2,6 +2,8 @@
 
 cd percona-server
 
+rm -rf build_release
+
 mkdir -p build_release
 cd build_release
 rm ./* -rf

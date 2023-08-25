@@ -2,6 +2,8 @@
 
 cd percona-server
 
+rm -rf build_debug
+
 mkdir -p build_debug
 cd build_debug
 rm ./* -rf
